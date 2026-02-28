@@ -28,18 +28,18 @@ export async function deleteClientAction(id: string): Promise<{ error: any }> {
     if (!supabase) return { error: notConfiguredError }
 
     // 1. Check for associated projects (Foreign Key Constraint safety)
+    // We check ALL projects (including 'deleted' ones) because they still exist as rows in the DB
+    // and will block deletion due to the foreign key constraint.
     const { count, error: countError } = await supabase
         .from('projects')
         .select('*', { count: 'exact', head: true })
         .eq('client_id', id)
-        .neq('status', 'deleted') // Optional: only care about non-deleted? 
-    // Actually, better to check all to avoid orphaned records in DB.
 
     if (countError) return { error: countError }
     if (count && count > 0) {
         return {
             error: {
-                message: `Cannot delete client with ${count} active project(s). Please delete or reassign all projects first.`
+                message: `Cannot delete client with ${count} project(s) in database. Even 'deleted' projects must be fully removed from the database first.`
             }
         }
     }
