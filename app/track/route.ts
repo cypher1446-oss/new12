@@ -286,14 +286,20 @@ export async function GET(request: NextRequest) {
                 }
             })
 
-            if (clientPidParam) {
-                const tmpUrl = new URL(finalUrl)
-                const existingVal = tmpUrl.searchParams.get(clientPidParam)
-                // If the param is missing OR it is empty/placeholder, set it to our PID
-                if (!existingVal || existingVal.trim() === '' || existingVal === 'xxx' || existingVal === 'N/A' || existingVal === '[PID]') {
-                    tmpUrl.searchParams.set(clientPidParam, pidToUse)
-                    finalUrl = tmpUrl.toString()
-                }
+            // Handle PID injection via parameter or placeholder
+            const pidParamName = clientPidParam || 'pid'
+            const tmpUrl = new URL(finalUrl)
+            const existingPidVal = tmpUrl.searchParams.get(pidParamName)
+
+            // If the param is missing OR it is empty/placeholder/generic, set it to our PID
+            if (!existingPidVal ||
+                existingPidVal.trim() === '' ||
+                existingPidVal === 'xxx' ||
+                existingPidVal === 'N/A' ||
+                existingPidVal === '[PID]' ||
+                existingPidVal === '{pid}') {
+                tmpUrl.searchParams.set(pidParamName, pidToUse)
+                finalUrl = tmpUrl.toString()
             }
         }
         if (tokenToUse) {
