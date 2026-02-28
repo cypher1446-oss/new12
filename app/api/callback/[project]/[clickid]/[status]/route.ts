@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase-server'
+
+export const runtime = "nodejs";
+
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ project: string; clickid: string; status: string }> }
+) {
+    const { project, clickid, status } = await context.params
+    const supabase = await createAdminClient()
+
+    if (!supabase) {
+        return NextResponse.redirect(new URL('/paused?title=SYSTEM_OFFLINE', request.url))
+    }
+
+    const allowedStatuses = ['complete', 'terminated', 'quota_full', 'duplicate_ip', 'security_terminate']
+    const incomingStatus = allowedStatuses.includes(status) ? status : 'terminated'
+
+    try {
+        // 1. Strict Update Logic
+        const { data: updateData, error: updateError, count } = await supabase
+            .from('responses')
+            .update({
+                status: incomingStatus,
+                updated_at: new Date().toISOString()
+            })
+            .eq('clickid', clickid)
+            .eq('project_code', project)
+            .in('status', ['in_progress', 'started', 'click'])
+
+            .select()
+
+        const success = !updateError && count !== null && count > 0
+
+        // 2. Audit Logging
+        await supabase.from('callback_events').insert([{
+            clickid,
+            project_code: project,
+            incoming_status: status,
+            update_result: success ? 'SUCCESS' : 'FAILED'
+        }])
+
+        // 3. Final Hub Redirect
+        // Redirect to /status/[clickid] for rendering
+        return NextResponse.redirect(new URL(`/status/${clickid}`, request.url))
+
+    } catch (e) {
+        console.error('[API Callback] Error:', e)
+        return NextResponse.redirect(new URL('/paused?title=CALLBACK_ERROR', request.url))
+    }
+}

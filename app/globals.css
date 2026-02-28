@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fdfdfd;
+  --foreground: #0f172a;
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+}
+
+@theme inline {
+  --color-primary: #5B5CF6;
+  --color-primary-hover: #4B4CF0;
+  --color-primary-tint: #EEF0FF;
+
+  --color-text-dark: #0F172A;
+  --color-text-body: #475569;
+  --color-text-muted: #94A3B8;
+
+  --color-bg-main: #FFFFFF;
+  --color-bg-alt: #F8FAFC;
+  --color-border-base: #E2E8F0;
+
+  --shadow-bento: 0 4px 20px rgba(0, 0, 0, 0.03);
+  --shadow-bento-hover: 0 8px 30px rgba(0, 0, 0, 0.06);
+  --shadow-primary-soft: 0 10px 30px -5px rgba(91, 92, 246, 0.2);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --animate-reveal: reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-bg-main text-text-body antialiased selection:bg-indigo-100 selection:text-indigo-900;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-text-dark font-black tracking-tight;
+  }
+}
+
+@layer components {
+  .bento-grid {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[250px];
+  }
+
+  .bento-item {
+    @apply bg-white border border-border-base rounded-[32px] p-8 shadow-bento hover:shadow-bento-hover transition-all duration-500 overflow-hidden relative;
+  }
+
+  .fluence-btn {
+    @apply px-8 py-3.5 rounded-2xl font-bold transition-all duration-300 active:scale-[0.98] inline-flex items-center justify-center;
+  }
+
+  .fluence-btn-primary {
+    @apply px-8 py-3.5 rounded-2xl font-bold transition-all duration-300 active:scale-[0.98] inline-flex items-center justify-center bg-primary text-white hover:bg-primary-hover shadow-primary-soft;
+  }
+
+  .fluence-btn-secondary {
+    @apply px-8 py-3.5 rounded-2xl font-bold transition-all duration-300 active:scale-[0.98] inline-flex items-center justify-center bg-white text-text-dark border border-border-base hover:border-text-muted/20 hover:bg-bg-alt;
+  }
+
+  .reveal-on-scroll {
+    opacity: 0;
+    animation: var(--animate-reveal);
+  }
+}

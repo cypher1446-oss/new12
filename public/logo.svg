@@ -1,0 +1,24 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5" />
+      <stop offset="100%" style="stop-color:#10B981" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Circle (Soft Glass Look) -->
+  <circle cx="100" cy="100" r="90" fill="#F8FAFC" />
+  <circle cx="100" cy="100" r="90" stroke="url(#logoGradient)" stroke-width="2" stroke-dasharray="10 5" opacity="0.2" />
+
+  <!-- Main "O" Icon -->
+  <circle cx="100" cy="100" r="50" stroke="url(#logoGradient)" stroke-width="12" stroke-linecap="round" />
+  
+  <!-- "Insights" Bar Chart Segment -->
+  <rect x="85" y="85" width="8" h="30" rx="4" fill="url(#logoGradient)" />
+  <rect x="100" y="75" width="8" h="40" rx="4" fill="url(#logoGradient)" />
+  <rect x="115" y="95" width="8" h="20" rx="4" fill="url(#logoGradient)" opacity="0.6" />
+
+  <!-- Magnifying Glass Handle Segment -->
+  <line x1="135" y1="135" x2="165" y2="165" stroke="url(#logoGradient)" stroke-width="12" stroke-linecap="round" />
+</svg>

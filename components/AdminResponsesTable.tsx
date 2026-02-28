@@ -1,0 +1,220 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase'
+
+interface Response {
+    id: string
+    uid: string
+    supplier_token?: string
+    project_code: string
+    project_name: string
+    ip: string
+    geo_country?: string
+    device_type: string
+    user_agent: string
+    status: string
+    created_at: string
+}
+
+export default function AdminResponsesTable({ initialResponses }: { initialResponses: Response[] }) {
+    const [responses, setResponses] = useState<Response[]>(initialResponses)
+    const [isLive, setIsLive] = useState(false)
+    const supabase = createClient()
+
+    useEffect(() => {
+        // Cache for project names to avoid repeated fetches
+        const projectCache: Record<string, string> = {}
+        responses.forEach(r => {
+            if (r.project_code && r.project_name) projectCache[r.project_code] = r.project_name
+        })
+
+        const fetchProjectName = async (projectId: string, projectCode: string) => {
+            if (projectCache[projectCode]) return projectCache[projectCode]
+
+            const { data } = await supabase
+                .from('projects')
+                .select('project_name')
+                .eq('id', projectId)
+                .single()
+
+            const name = data?.project_name || projectCode || 'Unknown'
+            projectCache[projectCode] = name
+            return name
+        }
+
+        // Subscription to Realtime
+        const channel = supabase
+            .channel('responses_realtime')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'responses' },
+                async (payload) => {
+                    console.log('[Realtime] New Response:', payload.new)
+                    const newRow = payload.new as any
+
+                    // Fetch project name (from cache or DB)
+                    const projectName = await fetchProjectName(newRow.project_id, newRow.project_code)
+
+                    const mappedRow: Response = {
+                        ...newRow,
+                        project_name: projectName,
+                        uid: newRow.uid || 'N/A',
+                        ip: newRow.ip || 'N/A'
+                    }
+
+                    setResponses(prev => [mappedRow, ...prev].slice(0, 500))
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'responses' },
+                (payload) => {
+                    console.log('[Realtime] Updated Response:', payload.new)
+                    const updatedRow = payload.new as any
+                    setResponses(prev => prev.map(r =>
+                        r.id === updatedRow.id ? { ...r, ...updatedRow } : r
+                    ))
+                }
+            )
+            .on(
+                'system',
+                {},
+                (status) => {
+                    console.log('[Realtime] Connection Status:', status)
+                    setIsLive(status === 'SUBSCRIBED')
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    setIsLive(true)
+                } else {
+                    setIsLive(false)
+                }
+            })
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [supabase])
+
+    // IP Activity Logic for badges
+    const today = new Date().toDateString()
+    const ipCountsToday = responses.reduce((acc: Record<string, number>, r) => {
+        const isToday = new Date(r.created_at).toDateString() === today
+        if (isToday && r.ip) {
+            acc[r.ip] = (acc[r.ip] || 0) + 1
+        }
+        return acc
+    }, {})
+
+    return (
+        <div className="bg-white shadow rounded-2xl border border-gray-100 overflow-hidden relative">
+            {/* Live Indicator Overlay */}
+            <div className="absolute top-2 right-6 z-10 flex items-center space-x-2">
+                <span className={`h-2 w-2 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                    {isLive ? 'Live Sync' : 'Connecting...'}
+                </span>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">UID (Original)</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Supplier Token</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Project</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">IP Address</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Device</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">User Agent</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Status</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                        {responses.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="px-6 py-12 text-center text-gray-400 italic text-sm">
+                                    No tracking data matching filters.
+                                </td>
+                            </tr>
+                        ) : (
+                            responses.map((r) => {
+                                const isHighActivity = r.ip && ipCountsToday[r.ip] > 3;
+                                return (
+                                    <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-xs font-mono text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                                                {r.uid || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-xs font-bold text-indigo-600">
+                                                {r.supplier_token || r.uid || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold text-gray-900">{r.project_name}</span>
+                                                <span className="text-[10px] text-gray-400 font-medium">{r.project_code}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap lowercase">
+                                            <div className="flex flex-col space-y-1">
+                                                <div className="flex items-center space-x-1">
+                                                    <span className="text-[11px] text-gray-500 font-mono">{r.ip}</span>
+                                                    {r.geo_country && (
+                                                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1 rounded">{r.geo_country}</span>
+                                                    )}
+                                                </div>
+                                                {isHighActivity && (
+                                                    <span className="text-[8px] font-black uppercase text-rose-600 bg-rose-50 px-1 py-0.5 rounded w-fit border border-rose-100">
+                                                        High Activity
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.device_type === 'Mobile' ? 'bg-orange-50 text-orange-600' :
+                                                r.device_type === 'Tablet' ? 'bg-blue-50 text-blue-600' :
+                                                    'bg-slate-50 text-slate-600'
+                                                }`}>
+                                                {r.device_type || 'Desktop'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span
+                                                className="text-[10px] text-gray-400 line-clamp-1 max-w-[150px] cursor-help"
+                                                title={r.user_agent}
+                                            >
+                                                {(r.user_agent || 'Unknown').substring(0, 80)}
+                                                {(r.user_agent?.length || 0) > 80 ? '...' : ''}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${r.status === 'started' ? 'bg-indigo-50 text-indigo-600' :
+                                                r.status === 'complete' ? 'bg-emerald-50 text-emerald-600' :
+                                                    r.status === 'terminate' ? 'bg-rose-50 text-rose-600' :
+                                                        r.status === 'terminated' ? 'bg-rose-50 text-rose-600' :
+                                                            r.status === 'quota' ? 'bg-rose-50 text-rose-600' :
+                                                                r.status === 'quota_full' ? 'bg-rose-50 text-rose-600' :
+                                                                    r.status === 'security_terminate' ? 'bg-red-600 text-white' :
+                                                                        'bg-gray-100 text-gray-500'
+                                                }`}>
+                                                {r.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium" suppressHydrationWarning>
+                                            {new Date(r.created_at).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
