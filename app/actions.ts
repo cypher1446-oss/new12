@@ -26,6 +26,25 @@ export async function flushResponsesAction(): Promise<{ success: boolean; error:
 export async function deleteClientAction(id: string): Promise<{ error: any }> {
     const supabase = await createAdminClient()
     if (!supabase) return { error: notConfiguredError }
+
+    // 1. Check for associated projects (Foreign Key Constraint safety)
+    const { count, error: countError } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', id)
+        .neq('status', 'deleted') // Optional: only care about non-deleted? 
+    // Actually, better to check all to avoid orphaned records in DB.
+
+    if (countError) return { error: countError }
+    if (count && count > 0) {
+        return {
+            error: {
+                message: `Cannot delete client with ${count} active project(s). Please delete or reassign all projects first.`
+            }
+        }
+    }
+
+    // 2. Perform deletion
     const { error } = await supabase
         .from('clients')
         .delete()
