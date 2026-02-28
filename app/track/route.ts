@@ -275,9 +275,11 @@ export async function GET(request: NextRequest) {
         const clientUidParam = (project as any).client_uid_param || null
 
         // Handle PID injection
-        const pidToUse = clientPid || project.project_code
+        const pidToUse = (clientPid && clientPid.trim() !== '') ? clientPid : (project.project_code || 'N/A')
+        console.log(`[Redirect Debug] clientPid='${clientPid}', project_code='${project.project_code}', pidToUse='${pidToUse}', tokenToUse='${tokenToUse}'`)
+
         if (pidToUse) {
-            const pidPlaceholders = ['[PID]', '{pid}', '{PID}'] // Structured only
+            const pidPlaceholders = ['[PID]', '{pid}', '{PID}', '[pid]', '{PID_CODE}'] // Expanded list
             pidPlaceholders.forEach(p => {
                 if (finalUrl.includes(p)) {
                     finalUrl = finalUrl.replaceAll(p, encodeURIComponent(pidToUse))
