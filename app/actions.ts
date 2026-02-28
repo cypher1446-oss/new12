@@ -27,28 +27,25 @@ export async function deleteClientAction(id: string): Promise<{ error: any }> {
     const supabase = await createAdminClient()
     if (!supabase) return { error: notConfiguredError }
 
-    // 1. Check for associated projects (Foreign Key Constraint safety)
-    // We check ALL projects (including 'deleted' ones) because they still exist as rows in the DB
-    // and will block deletion due to the foreign key constraint.
-    const { count, error: countError } = await supabase
+    // 1. Unlink associated projects (Handle Foreign Key Constraint)
+    // We set client_id to null so the projects are 'orphaned' but not lost,
+    // which allows the client to be deleted from the database.
+    const { error: unlinkError } = await supabase
         .from('projects')
-        .select('*', { count: 'exact', head: true })
+        .update({ client_id: null })
         .eq('client_id', id)
 
-    if (countError) return { error: countError }
-    if (count && count > 0) {
-        return {
-            error: {
-                message: `Cannot delete client with ${count} project(s) in database. Even 'deleted' projects must be fully removed from the database first.`
-            }
-        }
+    if (unlinkError) {
+        console.error('[deleteClientAction] Unlink Error:', unlinkError)
+        return { error: unlinkError }
     }
 
-    // 2. Perform deletion
+    // 2. Perform deletion of the client
     const { error } = await supabase
         .from('clients')
         .delete()
         .eq('id', id)
+
     return { error }
 }
 
