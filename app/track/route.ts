@@ -253,7 +253,12 @@ export async function GET(request: NextRequest) {
                 finalUrl = countryConfig.target_url
             }
         }
-        const tokenToUse = project.target_uid || supplierToken || validatedUid
+
+        // Force Generated PID as Client UID if enabled
+        let tokenToUse = project.target_uid || supplierToken || validatedUid
+        if (project.force_pid_as_uid && clientPid) {
+            tokenToUse = clientPid
+        }
 
         // --- HMAC SIGNATURE GENERATION ---
         let signature = '';

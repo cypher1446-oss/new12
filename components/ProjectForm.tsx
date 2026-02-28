@@ -21,6 +21,7 @@ export default function ProjectForm({ clients }: { clients: Client[] }) {
         pid_prefix: '',             // e.g. "OPGH"
         pid_counter: 1,             // Starting number
         pid_padding: 2,             // e.g. 2 for "01"
+        force_pid_as_uid: false,     // Force generated PID as client UID
         // UID Logic
         target_uid: '',             // NEW: Global UID Override
         // Parameter isolation fields
@@ -80,6 +81,7 @@ export default function ProjectForm({ clients }: { clients: Client[] }) {
                     pid_prefix: '',
                     pid_counter: 1,
                     pid_padding: 2,
+                    force_pid_as_uid: false,
                     target_uid: '',
                     client_pid_param: '',
                     client_uid_param: '',
@@ -211,6 +213,28 @@ export default function ProjectForm({ clients }: { clients: Client[] }) {
                                     </code>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* PID-as-UID Logic Toggle */}
+                        <div className="mt-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${formData.force_pid_as_uid ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Use Generated PID as User ID (UID)</p>
+                                    <p className="text-[9px] font-medium text-slate-400 leading-tight mt-0.5">If enabled, the client receives the auto-incrementing PID (e.g. OPGH01) instead of random incoming UIDs.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, force_pid_as_uid: !formData.force_pid_as_uid })}
+                                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.force_pid_as_uid ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                            >
+                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData.force_pid_as_uid ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
                         </div>
 
                         {/* 3. Baseline & Advanced */}
