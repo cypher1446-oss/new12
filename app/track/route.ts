@@ -275,7 +275,10 @@ export async function GET(request: NextRequest) {
         const clientUidParam = (project as any).client_uid_param || null
 
         // Handle PID injection
-        const pidToUse = (clientPid && clientPid.trim() !== '') ? clientPid : (project.project_code || 'N/A')
+        // Use generated PID if available, else fallback to the incoming UID (Custom String), else Project Code
+        const pidToUse = (clientPid && clientPid.trim() !== '')
+            ? clientPid
+            : (validatedUid && validatedUid !== 'N/A' ? validatedUid : (project.project_code || 'N/A'))
         console.log(`[Redirect Debug] clientPid='${clientPid}', project_code='${project.project_code}', pidToUse='${pidToUse}', tokenToUse='${tokenToUse}'`)
 
         if (pidToUse) {
