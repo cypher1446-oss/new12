@@ -29,7 +29,7 @@ export async function updateResponseStatus(
     newStatus: string,
     clickid?: string | null,
     lastLandingPage?: string | null
-): Promise<{ id: string; status: string; uid: string; ip: string } | null> {
+): Promise<{ id: string; status: string; uid: string; ip: string; supplier_uid?: string; project_code?: string; client_uid_sent?: string; hash_identifier?: string; clickid?: string } | null> {
     const supabase = await createAdminClient()
     if (!supabase) return null
 
