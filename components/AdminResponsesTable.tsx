@@ -127,6 +127,7 @@ export default function AdminResponsesTable({ initialResponses }: { initialRespo
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Supplier UID (Incoming)</th>
+                            <th className="px-6 py-3 text-left text-[10px] font-bold text-violet-400 uppercase tracking-widest text-pretty">Supplier</th>
                             <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Client UID Sent</th>
                             <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">Project</th>
                             <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest text-pretty">IP Address</th>
@@ -153,6 +154,15 @@ export default function AdminResponsesTable({ initialResponses }: { initialRespo
                                             <span className="text-xs font-mono text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
                                                 {r.supplier_uid || r.uid || 'N/A'}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {(r as any).supplier_token ? (
+                                                <span className="text-[10px] font-black text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100 uppercase tracking-wider">
+                                                    {(r as any).supplier_name || (r as any).supplier_token}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-300">—</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex flex-col space-y-1">

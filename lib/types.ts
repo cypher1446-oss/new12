@@ -1,3 +1,27 @@
+export type Supplier = {
+    id: string
+    name: string
+    supplier_token: string           // short unique key like "XYZ" or "DYN01"
+    contact_email?: string | null
+    platform_type?: string | null    // dynata / lucid / cint / custom
+    uid_macro?: string | null        // their UID macro e.g. ##RID## for Dynata
+    complete_redirect_url?: string | null
+    terminate_redirect_url?: string | null
+    quotafull_redirect_url?: string | null
+    notes?: string | null
+    status: 'active' | 'paused'
+    created_at: string
+}
+
+export type SupplierProjectLink = {
+    id: string
+    supplier_id: string
+    project_id: string
+    quota_allocated: number
+    status: 'active' | 'paused'
+    created_at: string
+}
+
 export type ProjectAnalytics = {
     project_id: string
     project_name: string

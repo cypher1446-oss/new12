@@ -9,13 +9,15 @@ import {
     BarChart3,
     Settings as SettingsIcon,
     Shield,
-    Link2
+    Link2,
+    Truck
 } from 'lucide-react'
 
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Clients', href: '/admin/clients', icon: Users },
     { name: 'Projects', href: '/admin/projects', icon: Layers },
+    { name: 'Suppliers', href: '/admin/suppliers', icon: Truck },
     { name: 'Redirects', href: '/admin/redirects', icon: Link2 },
     { name: 'Responses', href: '/admin/responses', icon: BarChart3 },
     { name: 'Settings', href: '/admin/settings', icon: SettingsIcon },

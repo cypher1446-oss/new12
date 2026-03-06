@@ -3,6 +3,27 @@
 import { createAdminClient } from '@/lib/supabase-server'
 import { Project, Client } from '@/lib/types'
 import { dashboardService } from '@/lib/dashboardService'
+import { Supplier } from '@/lib/types'
+
+export async function createSupplierAction(data: Omit<Supplier, 'id' | 'created_at'>): Promise<{ data: Supplier | null; error: any }> {
+    return dashboardService.createSupplier(data)
+}
+
+export async function updateSupplierAction(id: string, data: Partial<Supplier>): Promise<{ error: any }> {
+    return dashboardService.updateSupplier(id, data)
+}
+
+export async function deleteSupplierAction(id: string): Promise<{ error: any }> {
+    return dashboardService.deleteSupplier(id)
+}
+
+export async function linkSupplierToProjectAction(supplierId: string, projectId: string, quota = 0): Promise<{ error: any }> {
+    return dashboardService.linkSupplierToProject(supplierId, projectId, quota)
+}
+
+export async function unlinkSupplierFromProjectAction(supplierId: string, projectId: string): Promise<{ error: any }> {
+    return dashboardService.unlinkSupplierFromProject(supplierId, projectId)
+}
 
 const notConfiguredError = { message: 'Database not configured' }
 

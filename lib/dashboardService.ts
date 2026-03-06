@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase-server'
-import { KPIStats, ProjectAnalytics, Client, Project } from '@/lib/types'
+import { KPIStats, ProjectAnalytics, Client, Project, Supplier, SupplierProjectLink } from '@/lib/types'
 
 const notConfiguredError = { message: 'Supabase not configured' }
 
@@ -237,6 +237,69 @@ export const dashboardService = {
             .from('responses')
             .delete()
             .neq('id', '00000000-0000-0000-0000-000000000000')
+        return { error }
+    },
+    async getSuppliers(): Promise<Supplier[]> {
+        const supabase = await createAdminClient()
+        if (!supabase) return []
+        const { data, error } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false })
+        if (error) return []
+        return data as Supplier[]
+    },
+
+    async getSupplierByToken(token: string): Promise<Supplier | null> {
+        const supabase = await createAdminClient()
+        if (!supabase) return null
+        const { data } = await supabase.from('suppliers').select('*').eq('supplier_token', token).eq('status', 'active').maybeSingle()
+        return data as Supplier | null
+    },
+
+    async createSupplier(supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<{ data: Supplier | null; error: any }> {
+        const supabase = await createAdminClient()
+        if (!supabase) return { data: null, error: { message: 'Supabase not configured' } }
+        const { data, error } = await supabase.from('suppliers').insert([supplier]).select().single()
+        return { data, error }
+    },
+
+    async updateSupplier(id: string, supplier: Partial<Supplier>): Promise<{ error: any }> {
+        const supabase = await createAdminClient()
+        if (!supabase) return { error: { message: 'Supabase not configured' } }
+        const { error } = await supabase.from('suppliers').update(supplier).eq('id', id)
+        return { error }
+    },
+
+    async deleteSupplier(id: string): Promise<{ error: any }> {
+        const supabase = await createAdminClient()
+        if (!supabase) return { error: { message: 'Supabase not configured' } }
+        const { error } = await supabase.from('suppliers').delete().eq('id', id)
+        return { error }
+    },
+
+    async getSupplierProjectLinks(projectId: string): Promise<(SupplierProjectLink & { supplier: Supplier })[]> {
+        const supabase = await createAdminClient()
+        if (!supabase) return []
+        const { data, error } = await supabase
+            .from('supplier_project_links')
+            .select('*, supplier:suppliers(*)')
+            .eq('project_id', projectId)
+        if (error || !data) return []
+        return data as any[]
+    },
+
+    async linkSupplierToProject(supplierId: string, projectId: string, quotaAllocated = 0): Promise<{ error: any }> {
+        const supabase = await createAdminClient()
+        if (!supabase) return { error: { message: 'Supabase not configured' } }
+        const { error } = await supabase.from('supplier_project_links')
+            .upsert([{ supplier_id: supplierId, project_id: projectId, quota_allocated: quotaAllocated, status: 'active' }],
+                { onConflict: 'supplier_id,project_id' })
+        return { error }
+    },
+
+    async unlinkSupplierFromProject(supplierId: string, projectId: string): Promise<{ error: any }> {
+        const supabase = await createAdminClient()
+        if (!supabase) return { error: { message: 'Supabase not configured' } }
+        const { error } = await supabase.from('supplier_project_links')
+            .delete().eq('supplier_id', supplierId).eq('project_id', projectId)
         return { error }
     }
 }

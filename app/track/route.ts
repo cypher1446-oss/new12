@@ -181,12 +181,18 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // 4. Supplier token (legacy RPC — kept for backward compat)
-        let supplierToken = validatedUid
-        if (project.token_prefix) {
-            const { data: tokenData, error: tokenError } = await supabase
-                .rpc('generate_supplier_token', { project_id_param: project.id })
-            if (!tokenError && tokenData) supplierToken = tokenData
+        // 4. Supplier token & Name resolution
+        const supplierToken = searchParams.get('supplier') || searchParams.get('oi_supplier') || null
+        let supplierNameRecord: string | null = null
+
+        if (supplierToken) {
+            const { data: sData } = await supabase
+                .from('suppliers')
+                .select('name')
+                .eq('supplier_token', supplierToken)
+                .eq('status', 'active')
+                .maybeSingle()
+            if (sData) supplierNameRecord = sData.name
         }
 
         // 5. Generate Client PID if tool is configured
@@ -226,8 +232,9 @@ export async function GET(request: NextRequest) {
                 uid: validatedUid,
                 client_pid: clientPid,          // NEW: Store the generated PID
                 hash_identifier: hashIdentifier,
-                supplier_token: supplierToken || null,
-                supplier: supplierName,         // Stored separately — never mixed into vendor URL params
+                supplier_token: supplierToken,   // which supplier sent this respondent
+                supplier_name: supplierNameRecord, // denormalized name for quick display
+                supplier: supplierToken,         // legacy compat
                 session_token: sessionToken,
                 oi_session: sessionToken,       // Primary match key for callbacks
                 status: 'in_progress',

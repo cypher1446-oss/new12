@@ -215,7 +215,55 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // ─── STEP 8: FINAL REDIRECT ─────────────────────────────────────────
+        // ─── STEP 8: CHECK SUPPLIER REDIRECT ────────────────────────────────────────
+        let supplierRedirectUrl: string | null = null
+
+        if (targetId) {
+            const { data: responseRecord } = await supabase
+                .from('responses')
+                .select('supplier_token, supplier_uid, uid')
+                .eq('id', targetId)
+                .maybeSingle()
+
+            if (responseRecord?.supplier_token) {
+                const { data: supplierData } = await supabase
+                    .from('suppliers')
+                    .select('complete_redirect_url, terminate_redirect_url, quotafull_redirect_url')
+                    .eq('supplier_token', responseRecord.supplier_token)
+                    .eq('status', 'active')
+                    .maybeSingle()
+
+                if (supplierData) {
+                    const rawSupplierUrl =
+                        type === 'complete' ? supplierData.complete_redirect_url :
+                            (type === 'terminate' || type === 'terminated') ? supplierData.terminate_redirect_url :
+                                (type === 'quota' || type === 'quota_full') ? supplierData.quotafull_redirect_url :
+                                    null
+
+                    if (rawSupplierUrl) {
+                        const supplierUid = responseRecord.supplier_uid || responseRecord.uid || finalUid || ''
+                        try {
+                            const url = new URL(rawSupplierUrl)
+                            if (!url.searchParams.has('uid')) {
+                                url.searchParams.set('uid', supplierUid)
+                            }
+                            supplierRedirectUrl = url.toString()
+                            console.log(`[status] Supplier redirect → ${supplierRedirectUrl}`)
+                        } catch {
+                            console.error('[status] Invalid supplier redirect URL:', rawSupplierUrl)
+                        }
+                    }
+                }
+            }
+        }
+
+        // If supplier redirect exists, forward respondent there
+        // Otherwise fall through to default landing page
+        if (supplierRedirectUrl) {
+            return NextResponse.redirect(supplierRedirectUrl)
+        }
+
+        // ─── STEP 9: FINAL REDIRECT ─────────────────────────────────────────
         const landingUrl = new URL(config.route, request.url)
         landingUrl.searchParams.set('pid', project.project_code)
         landingUrl.searchParams.set('uid', finalUid || 'N/A')

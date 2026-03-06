@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { getClientIp } from '@/lib/getClientIp'
+import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
 export const runtime = "nodejs";
@@ -76,6 +77,21 @@ export async function GET(
             return NextResponse.redirect(new URL(`/paused?pid=${code}&title=PROJECT_PAUSED`, request.url))
         }
 
+        // Capture supplier token from query param (e.g. ?supplier=XYZ)
+        const supplierToken = request.nextUrl.searchParams.get('supplier') || null
+        let supplierName: string | null = null
+
+        // If supplier token provided, resolve supplier name for storage
+        if (supplierToken) {
+            const { data: supplierRow } = await supabase
+                .from('suppliers')
+                .select('name')
+                .eq('supplier_token', supplierToken)
+                .eq('status', 'active')
+                .maybeSingle()
+            if (supplierRow) supplierName = supplierRow.name
+        }
+
         const sessionToken = crypto.randomUUID()
         const oiPrefix: string = (project as any).oi_prefix || 'oi_'
 
@@ -135,6 +151,9 @@ export async function GET(
                 oi_session: sessionToken,
                 clickid: sessionToken,
                 hash: sessionToken,
+                supplier_token: supplierToken,   // which supplier sent this respondent
+                supplier_name: supplierName,     // denormalized name for quick display
+                supplier: supplierToken,         // legacy compat
                 status: 'in_progress',
                 ip: ip,
                 user_agent: request.headers.get('user-agent') || 'Unknown',
@@ -148,7 +167,21 @@ export async function GET(
             return NextResponse.redirect(new URL('/paused?title=TRACKING_ERROR', request.url))
         }
 
-        // 6. Smart URL Builder
+        // 6. Set Cookies for session persistence
+        const cookieStore = await cookies()
+        const cookieOptions = {
+            maxAge: 60 * 60 * 4, // 4 hours
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax' as const
+        }
+
+        cookieStore.set('last_sid', sessionToken, cookieOptions)
+        cookieStore.set('last_uid', incomingUid, cookieOptions)
+        cookieStore.set('last_pid', code, cookieOptions)
+
+        // 7. Smart URL Builder
         const builtUrl = buildSurveyUrl(
             project.base_url,
             sessionToken,
@@ -158,7 +191,7 @@ export async function GET(
             project.client_uid_param
         )
 
-        // 7. Redirect to Survey
+        // 8. Redirect to Survey
         return NextResponse.redirect(new URL(builtUrl))
 
     } catch (e) {

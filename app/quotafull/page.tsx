@@ -1,5 +1,6 @@
 import LandingResultLayout from '@/components/LandingResultLayout'
 import { getLandingPageData, updateResponseStatus } from '@/lib/landingService'
+import { redirect } from 'next/navigation'
 
 export const dynamic = "force-dynamic"
 
@@ -17,12 +18,23 @@ export default async function QuotaFullPage(props: {
     const uid = (params.uid as string) || cookieUid || ''
     const clickid = (params.clickid as string) || (params.cid as string) || null
 
-    // UPDATE: update record to 'quota_full'
+    // 1. Update record in DB
     const updated = (pid && uid) || clickid ? await updateResponseStatus(pid, uid, 'quota_full', clickid, 'quota_full') : null
 
+    // 2. Fetch data (including supplier redirect templates)
     const data = await getLandingPageData(params, {
         headers: { get: (name: string) => headerList.get(name) }
     } as any)
+
+    // 3. Determine if we should perform an INSTANT redirect
+    const redirectUrl = data.supplier?.quotafull_redirect_url
+        ? data.supplier.quotafull_redirect_url.replace('{{pid}}', pid || data.pid).replace('{{uid}}', uid || data.uid)
+        : undefined
+
+    if (redirectUrl) {
+        console.log(`[QuotaFull] Performing instant supplier redirect to: ${redirectUrl}`)
+        redirect(redirectUrl)
+    }
 
     const title = (params.title as string) || "SORRY!"
     const desc = (params.desc as string) || "The Quota for this survey is FULL"
@@ -37,6 +49,7 @@ export default async function QuotaFullPage(props: {
             ip={data.ip}
             status="Quota Full"
             responseId={updated?.id || data.response?.id || undefined}
+            redirectUrl={redirectUrl}
         />
     )
 }

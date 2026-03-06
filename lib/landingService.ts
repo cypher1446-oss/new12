@@ -36,12 +36,10 @@ export async function updateResponseStatus(
     let existing: any = null
 
     // STEP 1a — Find by oi_session (preferred — zero vendor PID collision risk)
-    // The clickid param is reused to carry oi_session when passed from complete/terminate pages
     if (clickid && clickid.includes('-') && clickid.length === 36) {
-        // UUID-shaped value — likely an oi_session token
         const { data: bySession } = await supabase
             .from('responses')
-            .select('id, status, uid, ip, project_code, start_time')
+            .select('id, status, uid, ip, project_code, start_time, supplier_uid, client_uid_sent, hash_identifier')
             .eq('oi_session', clickid)
             .in('status', ['in_progress', 'started', 'click'])
             .maybeSingle()
@@ -53,19 +51,19 @@ export async function updateResponseStatus(
         const cleanCid = clickid.trim()
         const { data } = await supabase
             .from('responses')
-            .select('id, status, uid, ip, project_code, start_time')
+            .select('id, status, uid, ip, project_code, start_time, supplier_uid, client_uid_sent, hash_identifier')
             .ilike('clickid', cleanCid)
             .in('status', ['in_progress', 'started', 'click'])
             .maybeSingle()
         existing = data
     }
 
-    // Fallback: Try with project_code + uid (Case-Insensitive UID)
+    // Fallback: Try with project_code + uid
     if (!existing && projectCode) {
         const cleanUid = userUid.trim()
         const { data } = await supabase
             .from('responses')
-            .select('id, status, uid, ip, project_code, start_time')
+            .select('id, status, uid, ip, project_code, start_time, supplier_uid, client_uid_sent, hash_identifier')
             .or(`uid.ilike.${cleanUid},client_uid_sent.ilike.${cleanUid},client_pid.ilike.${cleanUid}`)
             .eq('project_code', projectCode)
             .in('status', ['in_progress', 'started', 'click'])
@@ -75,14 +73,14 @@ export async function updateResponseStatus(
         existing = data
     }
 
-    // NEW FALLBACK: Try with client_pid + uid (if project tool was used)
+    // NEW FALLBACK: Try with client_pid + uid
     if (!existing && projectCode) {
         const cleanUid = userUid.trim()
         const { data } = await supabase
             .from('responses')
-            .select('id, status, uid, ip, project_code, start_time')
+            .select('id, status, uid, ip, project_code, start_time, supplier_uid, client_uid_sent, hash_identifier')
             .or(`uid.ilike.${cleanUid},client_uid_sent.ilike.${cleanUid},client_pid.ilike.${cleanUid}`)
-            .eq('client_pid', projectCode) // The vendor might be passing back the generated PID as 'pid'
+            .eq('client_pid', projectCode)
             .in('status', ['in_progress', 'started', 'click'])
             .order('created_at', { ascending: false })
             .limit(1)
@@ -90,12 +88,12 @@ export async function updateResponseStatus(
         existing = data
     }
 
-    // Fallback: try uid-only (Case-Insensitive)
+    // Fallback: try uid-only
     if (!existing) {
         const cleanUid = userUid.trim()
         const { data } = await supabase
             .from('responses')
-            .select('id, status, uid, ip, project_code, start_time')
+            .select('id, status, uid, ip, project_code, start_time, supplier_uid, client_uid_sent, hash_identifier')
             .or(`uid.ilike.${cleanUid},client_uid_sent.ilike.${cleanUid},client_pid.ilike.${cleanUid}`)
             .in('status', ['in_progress', 'started'])
             .order('created_at', { ascending: false })
@@ -118,15 +116,12 @@ export async function updateResponseStatus(
     if (clickid) updatePayload.hash = clickid
     if (lastLandingPage) updatePayload.last_landing_page = lastLandingPage
 
-    // Set completed_at for backward compat
     if (newStatus === 'complete') updatePayload.completed_at = now.toISOString()
 
-    // NEW requirements: end_time and loi_seconds calculation
     const terminalStatuses = ['complete', 'terminate', 'quota', 'security_terminate', 'duplicate_ip', 'duplicate_string', 'terminated', 'quota_full']
     if (terminalStatuses.includes(newStatus)) {
         updatePayload.end_time = now.toISOString()
 
-        // Calculate LOI
         if (existing.start_time) {
             const startTime = new Date(existing.start_time)
             const loiSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000)
@@ -156,7 +151,7 @@ export async function updateResponseStatus(
     }
 
     console.log(`[updateResponseStatus] Successfully updated id=${existing.id} to ${newStatus}`);
-    return data;
+    return data as any;
 }
 
 export async function getLandingPageData(
@@ -179,22 +174,24 @@ export async function getLandingPageData(
         clickid,
         ip,
         response: null as any,
-        project: null as any
+        project: null as any,
+        supplier: null as any
     };
 
     const supabase = await createAdminClient()
     if (!supabase) return result
 
     if (clickid) {
+        // ... (existing lookup logic remains similar but we ensure we get supplier token)
         const { data: respBySid } = await supabase
             .from('responses')
-            .select('*')
+            .select('*, suppliers(*)')
             .eq('oi_session', clickid)
             .maybeSingle()
 
         const { data: respByCid } = !respBySid ? await supabase
             .from('responses')
-            .select('*')
+            .select('*, suppliers(*)')
             .eq('clickid', clickid)
             .maybeSingle() : { data: null }
 
@@ -203,6 +200,49 @@ export async function getLandingPageData(
             result.response = resp
             result.pid = resp.project_code || code
             result.uid = resp.uid || resp.user_uid || uid
+            result.supplier = resp.suppliers
+
+            // FALLBACK: If join failed but we have a token, fetch manually
+            if (!result.supplier && resp.supplier_token) {
+                const { data: s } = await supabase
+                    .from('suppliers')
+                    .select('*')
+                    .eq('supplier_token', resp.supplier_token)
+                    .maybeSingle()
+                result.supplier = s
+            }
+        }
+    }
+
+    // Fallback: lookup by uid if no clickid response found
+    if (!result.response && uid && uid !== 'N/A') {
+        const { data: resp } = await supabase
+            .from('responses')
+            .select('*, suppliers(*)')
+            .eq('uid', uid)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+        if (resp) {
+            result.response = resp
+            result.pid = resp.project_code || code
+            result.supplier = resp.suppliers
+        }
+    }
+
+    // If supplier still missing, try to get from query params
+    const sToken = (params.supplier as string);
+    if (!result.supplier && sToken) {
+        // Database is now live, always look there
+        const { data: s } = await supabase
+            .from('suppliers')
+            .select('*')
+            .eq('supplier_token', sToken)
+            .maybeSingle();
+
+        if (s) {
+            result.supplier = s;
         }
     }
 
