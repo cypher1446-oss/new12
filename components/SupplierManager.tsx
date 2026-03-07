@@ -69,7 +69,7 @@ export default function SupplierManager({ suppliers: init, projects }: Props) {
     }
 
     const entryLink = (s: Supplier, code: string) =>
-        `${base}/r/${code}/${s.uid_macro || '[uid]'}?supplier=${s.supplier_token}`
+        `${base}/r/${code}/${s.supplier_token}/${s.uid_macro || '[uid]'}`
 
     const f = (key: keyof FormData, val: string) =>
         setForm(prev => ({ ...prev, [key]: val }))
@@ -166,7 +166,7 @@ export default function SupplierManager({ suppliers: init, projects }: Props) {
                                     placeholder="e.g. MACK / DYN / LUC"
                                     className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-black font-mono text-violet-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-50" />
                                 <p className="text-[9px] text-slate-400 ml-1">
-                                    Entry URL ends with: <span className="text-violet-500">?supplier={form.supplier_token || 'TOKEN'}</span>
+                                    Entry URL format: <span className="text-violet-500">/r/PROJECT/{form.supplier_token || 'TOKEN'}/UID</span>
                                 </p>
                             </div>
                             <div className="space-y-1">
