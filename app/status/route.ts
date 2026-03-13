@@ -241,7 +241,7 @@ export async function GET(request: NextRequest) {
                                     null
 
                     if (rawSupplierUrl) {
-                        const supplierUid = responseRecord.supplier_uid || responseRecord.uid || finalUid || ''
+                        const supplierUid = responseRecord.supplier_uid || finalUid || ''
                         try {
                             const url = new URL(rawSupplierUrl)
                             if (!url.searchParams.has('uid')) {
@@ -270,7 +270,7 @@ export async function GET(request: NextRequest) {
                 .eq('id', targetId)
                 .maybeSingle()
             if (recUid) {
-                displayUid = recUid.supplier_uid || recUid.uid || displayUid
+                displayUid = recUid.supplier_uid || displayUid
             }
         }
         landingUrl.searchParams.set('uid', displayUid)

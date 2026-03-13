@@ -6,35 +6,65 @@ import crypto from 'crypto'
 
 export const runtime = "nodejs"
 
-/**
- * Unified URL Builder
- */
+type UidParamConfig = {
+    param: string
+    value: 'client_rid' | 'supplier_uid' | 'session' | 'hash' | string
+}
+
 function buildSurveyUrl(
     rawUrl: string,
     sessionToken: string,
-    uid: string,
+    clientRid: string,
+    supplierUid: string,
+    hashId: string,
     prefix: string,
     clientPidParam?: string | null,
-    clientUidParam?: string | null
+    clientUidParam?: string | null,
+    uidParams?: UidParamConfig[] | null
 ): string {
     const url = new URL(rawUrl)
-    const existingParams = new Set(url.searchParams.keys())
-    const safeSet = (key: string, value: string) => {
-        if (!existingParams.has(key)) url.searchParams.set(key, value)
+
+    // CRITICAL FIX: forceSet always overwrites — even empty/placeholder params
+    const forceSet = (key: string, value: string) => {
+        url.searchParams.set(key, value)
     }
 
-    safeSet(`${prefix}session`, sessionToken)
-
-    if (clientPidParam) {
-        safeSet(clientPidParam, uid)
+    const resolveValue = (valueType: string): string => {
+        switch (valueType) {
+            case 'client_rid':   return clientRid
+            case 'supplier_uid': return supplierUid
+            case 'session':      return sessionToken
+            case 'hash':         return hashId
+            default:             return valueType
+        }
     }
-    if (clientUidParam) {
-        safeSet(clientUidParam, uid)
+
+    // Session always injected
+    forceSet(`${prefix}session`, sessionToken)
+
+    // Priority 1: uid_params array (multi param mode)
+    if (uidParams && uidParams.length > 0) {
+        for (const cfg of uidParams) {
+            if (cfg.param) forceSet(cfg.param, resolveValue(cfg.value))
+        }
+        return url.toString()
     }
 
-    // Default fallback
+    // Priority 2: legacy single param mode
+    if (clientPidParam) forceSet(clientPidParam, clientRid)
+    if (clientUidParam) forceSet(clientUidParam, clientRid)
+
+    // Priority 3: default fallback
     if (!clientPidParam && !clientUidParam) {
-        safeSet(`${prefix}uid`, uid)
+        let injected = false
+        const PLACEHOLDERS = ['', '[UID]', '{uid}', '##RID##', 'REPLACE', '[RID]', '{rid}']
+        for (const [key, val] of url.searchParams.entries()) {
+            if (PLACEHOLDERS.includes(val)) {
+                forceSet(key, clientRid)
+                injected = true
+            }
+        }
+        if (!injected) forceSet(`${prefix}uid`, clientRid)
     }
 
     return url.toString()
@@ -47,15 +77,11 @@ export async function GET(
     const { code, slug } = await context.params
     const ip = getClientIp(request)
 
-    // Routing Logic: 
-    // Case 1: /r/[code]/[uid] -> slug = [uid]
-    // Case 2: /r/[code]/[supplier]/[uid] -> slug = [supplier, uid]
     let incomingUid: string | null = null
     let supplierToken: string | null = null
 
     if (slug.length === 1) {
         incomingUid = slug[0]
-        // Legacy support: check for ?supplier= in query
         supplierToken = request.nextUrl.searchParams.get('supplier') || null
     } else if (slug.length >= 2) {
         supplierToken = slug[0]
@@ -72,21 +98,15 @@ export async function GET(
     }
 
     try {
-        // 1. Fetch Project
         const { data: project } = await supabase
             .from('projects')
             .select('*')
             .eq('project_code', code)
             .maybeSingle()
 
-        if (!project) {
-            return NextResponse.redirect(new URL('/paused?title=PROJECT_NOT_FOUND', request.url))
-        }
-        if (project.status === 'paused') {
-            return NextResponse.redirect(new URL(`/paused?pid=${code}&title=PROJECT_PAUSED`, request.url))
-        }
+        if (!project) return NextResponse.redirect(new URL('/paused?title=PROJECT_NOT_FOUND', request.url))
+        if (project.status === 'paused') return NextResponse.redirect(new URL(`/paused?pid=${code}&title=PROJECT_PAUSED`, request.url))
 
-        // 2. Resolve Supplier Name
         let supplierName: string | null = null
         if (supplierToken) {
             const { data: supplierRow } = await supabase
@@ -100,9 +120,9 @@ export async function GET(
 
         const sessionToken = crypto.randomUUID()
         const oiPrefix: string = (project as any).oi_prefix || 'oi_'
-        let clientUidToSent = incomingUid
+        let clientUidToSent = incomingUid  // default: pass supplier UID as-is
 
-        // 3. PID Generation Logic
+        // PID generation (custom RID)
         if (project.pid_prefix) {
             const { data: updatedProject, error: updateError } = await supabase
                 .from('projects')
@@ -115,29 +135,35 @@ export async function GET(
                 const countryParam = request.nextUrl.searchParams.get('country') || request.nextUrl.searchParams.get('c')
                 const countryPart = countryParam ? countryParam.toUpperCase() : ''
                 const generatedPid = `${project.pid_prefix}${countryPart}${String(updatedProject.pid_counter).padStart(project.pid_padding || 2, '0')}`
-
-                if (project.force_pid_as_uid) {
-                    clientUidToSent = generatedPid
-                }
+                if (project.force_pid_as_uid) clientUidToSent = generatedPid
             }
         }
-        if (project.target_uid) {
-            clientUidToSent = project.target_uid
-        }
 
-        // 4. Generate Hash Identifier
+        if (project.target_uid) clientUidToSent = project.target_uid
+
         const hashIdentifier = crypto.createHash('sha256')
             .update(`${incomingUid}-${Date.now()}`).digest('hex').substring(0, 8)
 
-        // 5. Insert tracking record
+        // Parse uid_params from DB
+        let uidParams: UidParamConfig[] | null = null
+        if ((project as any).uid_params) {
+            try {
+                const raw = (project as any).uid_params
+                uidParams = typeof raw === 'string' ? JSON.parse(raw) : raw
+            } catch {
+                console.warn('[UnifiedRouter] uid_params parse failed, using legacy mode')
+            }
+        }
+
+        // DB insert — supplier_uid is ALWAYS the original incomingUid
         const { error: insertError } = await supabase
             .from('responses')
             .insert([{
                 project_id: project.id,
                 project_code: code,
                 project_name: project.project_name || code,
-                supplier_uid: incomingUid,
-                client_uid_sent: clientUidToSent,
+                supplier_uid: incomingUid,        // original supplier UID — never overwrite
+                client_uid_sent: clientUidToSent, // custom RID sent to client
                 uid: incomingUid,
                 user_uid: incomingUid,
                 hash_identifier: hashIdentifier,
@@ -161,30 +187,25 @@ export async function GET(
             return NextResponse.redirect(new URL('/paused?title=TRACKING_ERROR', request.url))
         }
 
-        // 6. Set Cookies for session persistence
         const cookieStore = await cookies()
-        const cookieOptions = {
-            maxAge: 60 * 60 * 4, // 4 hours
-            path: '/',
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax' as const
-        }
+        const cookieOptions = { maxAge: 60 * 60 * 4, path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const }
         cookieStore.set('last_sid', sessionToken, cookieOptions)
         cookieStore.set('last_uid', incomingUid, cookieOptions)
         cookieStore.set('last_pid', code, cookieOptions)
 
-        // 7. Smart URL Builder
         const builtUrl = buildSurveyUrl(
             project.base_url,
             sessionToken,
             clientUidToSent,
+            incomingUid,
+            hashIdentifier,
             oiPrefix,
             project.client_pid_param,
-            project.client_uid_param
+            project.client_uid_param,
+            uidParams
         )
 
-        // 8. Redirect
+        console.log(`[UnifiedRouter] supplier_uid=${incomingUid} | client_rid=${clientUidToSent} | url=${builtUrl}`)
         return NextResponse.redirect(new URL(builtUrl))
 
     } catch (e) {

@@ -35,6 +35,11 @@ export default function ProjectEditForm({ project, clients }: ProjectEditFormPro
         force_pid_as_uid: (project as any).force_pid_as_uid || false,
     })
 
+    const existingUidParams = (project as any).uid_params
+    const [uidParamRows, setUidParamRows] = useState<{param: string; value: string}[]>(
+        Array.isArray(existingUidParams) ? existingUidParams : []
+    )
+
     // Initialize links if multi-country
     const [links, setLinks] = useState<{ country_code: string; target_url: string; active: boolean }[]>(
         project.is_multi_country && project.country_urls
@@ -72,8 +77,13 @@ export default function ProjectEditForm({ project, clients }: ProjectEditFormPro
         setError(null)
 
         try {
+            const uid_params = uidParamRows.filter(r => r.param.trim()).length > 0
+                ? uidParamRows.filter(r => r.param.trim())
+                : null
+
             const { error: updateError } = await updateProjectAction(project.id, {
                 ...formData,
+                uid_params,
                 country_urls: formData.is_multi_country ? links : []
             })
 
@@ -341,10 +351,77 @@ export default function ProjectEditForm({ project, clients }: ProjectEditFormPro
                                                 placeholder="oi_"
                                                 value={formData.oi_prefix}
                                                 onChange={(e) => setFormData({ ...formData, oi_prefix: e.target.value || 'oi_' })}
-                                                className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500/50 outline-none transition-all text-xs font-medium text-slate-700 placeholder:text-slate-300 font-mono"
+                                                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-400 outline-none transition-all text-xs font-medium text-slate-700 placeholder:text-slate-300 font-mono"
                                             />
                                             <p className="text-[9px] text-emerald-600 font-semibold leading-tight ml-1">⚡ Safe namespace</p>
                                         </div>
+                                    </div>
+
+                                    {/* URL Param Mapping — Multi UID/RID/TOID */}
+                                    <div className="md:col-span-4 space-y-3 pt-2 border-t border-slate-100">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-[10px] font-black text-violet-600 uppercase tracking-[0.15em]">URL Param Mapping</p>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">If set, overrides Vendor PID/UID Param above</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setUidParamRows([...uidParamRows, { param: '', value: 'client_rid' }])}
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-[10px] font-bold rounded-lg transition-colors"
+                                            >
+                                                <Plus className="w-3 h-3" /> Add Param
+                                            </button>
+                                        </div>
+
+                                        {uidParamRows.length === 0 && (
+                                            <p className="text-[10px] text-slate-300 italic px-1">No params — legacy single param mode active</p>
+                                        )}
+
+                                        {uidParamRows.map((row, i) => (
+                                            <div key={i} className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="param name (e.g. rid, toid, uid)"
+                                                    value={row.param}
+                                                    onChange={(e) => {
+                                                        const rows = [...uidParamRows]
+                                                        rows[i] = { ...rows[i], param: e.target.value }
+                                                        setUidParamRows(rows)
+                                                    }}
+                                                    className="flex-1 px-3 py-2 bg-white border border-violet-200 rounded-lg text-xs font-mono text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-violet-300 outline-none"
+                                                />
+                                                <select
+                                                    value={row.value}
+                                                    onChange={(e) => {
+                                                        const rows = [...uidParamRows]
+                                                        rows[i] = { ...rows[i], value: e.target.value }
+                                                        setUidParamRows(rows)
+                                                    }}
+                                                    className="flex-1 px-3 py-2 bg-violet-50 border border-violet-200 rounded-lg text-xs font-bold text-violet-800 focus:ring-2 focus:ring-violet-300 outline-none"
+                                                >
+                                                    <option value="client_rid">client_rid — custom RID (goes to client)</option>
+                                                    <option value="supplier_uid">supplier_uid — supplier original UID</option>
+                                                    <option value="session">session — session token</option>
+                                                    <option value="hash">hash — 8-char hash</option>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setUidParamRows(uidParamRows.filter((_, j) => j !== i))}
+                                                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+
+                                        {uidParamRows.filter(r => r.param).length > 0 && (
+                                            <div className="p-2 bg-violet-50 border border-violet-100 rounded-lg">
+                                                <p className="text-[9px] font-bold text-violet-500 uppercase tracking-wider mb-1">Preview</p>
+                                                <code className="text-[10px] text-violet-700 break-all">
+                                                    ?{uidParamRows.filter(r => r.param).map(r => `${r.param}=[${r.value}]`).join('&')}
+                                                </code>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </details>
@@ -528,10 +605,10 @@ export default function ProjectEditForm({ project, clients }: ProjectEditFormPro
                         )
                     }
 
-                </div >
+                </div>
 
                 {/* Footer buttons matching premium alignment */}
-                < div className="px-8 py-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between" >
+                <div className="px-8 py-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <div className="flex-1">
                         {error && (
                             <div className="flex items-center space-x-2 text-rose-500">
@@ -566,8 +643,8 @@ export default function ProjectEditForm({ project, clients }: ProjectEditFormPro
                             )}
                         </button>
                     </div>
-                </div >
-            </form >
-        </div >
+                </div>
+            </form>
+        </div>
     )
 }

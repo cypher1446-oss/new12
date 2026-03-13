@@ -83,6 +83,7 @@ export async function createProjectAction(formData: any, countryUrls: any[] = []
             pid_counter: formData.pid_counter || 1,
             pid_padding: formData.pid_padding || 2,
             force_pid_as_uid: formData.force_pid_as_uid || false,
+            uid_params: formData.uid_params || null,
             is_multi_country: countryUrls.length > 0,
             country_urls: countryUrls,
             status: 'active'
@@ -115,6 +116,7 @@ export async function updateProjectAction(id: string, data: any): Promise<{ erro
             pid_counter: data.pid_counter !== undefined ? data.pid_counter : undefined,
             pid_padding: data.pid_padding !== undefined ? data.pid_padding : undefined,
             force_pid_as_uid: data.force_pid_as_uid !== undefined ? data.force_pid_as_uid : undefined,
+            uid_params: data.uid_params !== undefined ? data.uid_params : undefined,
         })
         .eq('id', id)
     return { error }

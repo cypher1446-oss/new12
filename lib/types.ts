@@ -73,5 +73,7 @@ export type Project = {
     pid_prefix?: string | null,        // e.g. "OPGH"
     pid_counter?: number | null,       // Sequence counter
     pid_padding?: number | null,       // e.g. 2 for "01"
-    force_pid_as_uid?: boolean          // Force generated PID as client UID
+    force_pid_as_uid?: boolean,          // Force generated PID as client UID
+    // Multi UID/RID/TOID param mapping
+    uid_params?: { param: string; value: string }[] | null
 }

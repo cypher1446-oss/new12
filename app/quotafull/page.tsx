@@ -28,7 +28,9 @@ export default async function QuotaFullPage(props: {
 
     // 3. Extract supplier redirect URL passed from route.ts (or fallback to DB)
     const fallbackUrl = data.supplier?.quotafull_redirect_url
-        ? data.supplier.quotafull_redirect_url.replace('{{pid}}', pid || data.pid).replace('{{uid}}', uid || data.uid)
+        ? data.supplier.quotafull_redirect_url
+            .replace('{{pid}}', pid || data.pid)
+            .replace('{{uid}}', (updated as any)?.supplier_uid || (data.response as any)?.supplier_uid || uid || data.uid)
         : undefined;
     const redirectUrl = (params.sUrl as string) || fallbackUrl;
 
